@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Cormorant Garamond", serif;
+  --font-sans: "Inter", sans-serif;
+  --color-tea-green: #2d6a4f;
+  --color-tea-dark: #1b4332;
+  --color-tea-light: #d8f3dc;
+  --color-gold: #d4af37;
+  --color-gold-light: #f9e596;
+  --color-red-accent: #c1121f;
+  /* Design system §10 */
+  --color-page-bg: #f6f8f7;
+  --color-input-bg: #ffffff;
+  --color-input-border: #e5e7eb;
+  --color-input-text: #1f2937;
+  --color-surface-bg: #ffffff;
+  --color-surface-border: #e5e7eb;
+  --color-surface-muted: #f3f4f6;
+  --color-text-primary: #111827;
+  --color-text-muted: #6b7280;
+}
+
+:root.dark {
+  --color-page-bg: #102219;
+  --color-input-bg: #1b4332;
+  --color-input-border: #2d6a4f;
+  --color-input-text: #f3f4f6;
+  --color-surface-bg: #1b4332;
+  --color-surface-border: #2d6a4f;
+  --color-surface-muted: #0d1f17;
+  --color-text-primary: #f9fafb;
+  --color-text-muted: #9ca3af;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-page-bg);
+  color: var(--color-text-primary);
+}
+
+h1, h2, h3, h4, h5, h6, .font-serif {
+  font-family: var(--font-serif);
+}
+
+/* Design tokens for components */
+.bg-page-bg { background-color: var(--color-page-bg); }
+.bg-input-bg { background-color: var(--color-input-bg); }
+.border-input-border { border-color: var(--color-input-border); }
+.text-input-text { color: var(--color-input-text); }
+.bg-surface-bg { background-color: var(--color-surface-bg); }
+.border-surface-border { border-color: var(--color-surface-border); }
+.bg-surface-muted { background-color: var(--color-surface-muted); }
+.text-text-primary { color: var(--color-text-primary); }
+.text-text-muted { color: var(--color-text-muted); }

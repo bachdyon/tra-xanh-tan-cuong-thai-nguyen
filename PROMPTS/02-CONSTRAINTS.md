@@ -1,0 +1,169 @@
+# Website bán hàng – Ràng buộc kỹ thuật
+
+Áp dụng cho **bất kỳ** landing page bán hàng cùng stack (React + GAS + Sheets + PayOS + Hookdeck). Quy tắc bắt buộc cho GAS, Sheets, React, cache, lock, bảo mật, PayOS, webhook, triển khai. **Tham chiếu nhanh:** §1 GAS · §2 Sheets · §3 Cache · §4 Lock · §5 Bảo mật · §6 PayOS · §7 Webhook · §8 PRICE_CHANGED · §9 Seed · §10 React (Landing) · §11 Deploy
+
+**Tinh chỉnh khi áp dụng dự án mới (chỉ trong code/config, không sửa ràng buộc):** (1) Seed trong `code.gs`: mảng sản phẩm mẫu, category enum, tags theo ngành hàng. (2) Nội dung frontend: Hero, block cam kết, footer. (3) SĐT, Zalo: mỗi shop một bộ — nên config hoặc env. (4) §10 Design: màu, font, logo có thể đổi theo thương hiệu.
+
+---
+
+## §0. Stack
+
+- **Frontend:** React 19, TypeScript, Tailwind. **Kiểu:** Landing page (một trang chính + order-success / payment-failed). Font: cặp serif + sans phù hợp landing (vd Cormorant Garamond + Inter).
+- **Backend:** GAS (một file `code.gs`, doGet + doPost), Google Sheets.
+- **Thanh toán:** PayOS. **Webhook:** Hookdeck (proxy, retry 3 lần, exponential backoff).
+
+---
+
+## §1. GAS – Routing & CORS
+
+**Server là nguồn chân lý duy nhất** cho giá và tồn kho khi tạo đơn; không tin dữ liệu từ cache hay frontend.
+
+**doGet:** Chỉ `getProducts`, `getProductBySlug`, `getOrderStatus`. Dùng `e.parameter.action` (+ `slug`, `orderCode`). Không gộp getProducts vào doPost, không xử lý webhook trong doGet.
+
+**doPost:** Chỉ `createOrder` (body `action === "createOrder"`) và webhook PayOS (body có `code`, `data`, `signature`). Không khớp → `{ success: false, error: "Unknown action" }`.
+
+**CORS:** Deploy Anyone. Response: `ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON)`. **GAS không xử lý OPTIONS preflight** — nếu frontend gửi POST với `Content-Type: application/json`, trình duyệt sẽ gửi OPTIONS trước, GAS trả lỗi không có CORS header → chặn. **Fix:** Frontend dùng `Content-Type: text/plain;charset=UTF-8` khi POST (tránh preflight; GAS dùng `JSON.parse` cho body). Hoặc dùng Vite proxy trong dev: `/api` → GAS URL.
+
+**Secrets:** `PropertiesService.getScriptProperties()` cho `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`, `FRONTEND_URL`, `HOOKDECK_SOURCE_URL`. Không hardcode. Thiếu key → không gọi PayOS, trả lỗi cấu hình.
+
+---
+
+## §2. Google Sheets
+
+**Tự tạo sheet:** Products, Orders, Config, WebhookLogs — GAS tự tạo nếu chưa có. User chỉ cần tạo 1 spreadsheet, dán code. Không yêu cầu user nhập Sheet ID.
+
+**Products:** id, name, slug, category, tags JSON, price, salePrice, saleEndDate, images JSON, thumbnail, description, specs JSON, features JSON, stock, sku, isFeatured. Category: enum theo dự án. Tags: JSON array, chứa category + nhãn phụ (Hàng mới, Bán chạy, Giảm giá). Bỏ `isNew`, dùng tag "Hàng mới"; giữ `isFeatured`.
+
+**Orders:** orderCode, customerName, phone, email, address, items JSON, totalAmount, payosPaymentId, payosTransactionId, status, createdAt, updatedAt, webhookRawLog. Mọi đơn PENDING/PAID lưu đầy đủ.
+
+**WebhookLogs:** rawBody, computedSignature, receivedSignature, error, timestamp. Chỉ ghi khi lỗi.
+
+**Config:** A1=`LATEST_ORDER_ID`, B1=counter (khởi tạo 1000).
+
+**Số từ Sheet:** `getValues()` có thể trả string. **Bắt buộc** `Number(...)` khi so sánh giá/tổng với payload.
+
+---
+
+## §3. Cache
+
+**Chỉ cache:** getProducts. **Không cache:** createOrder, getOrderStatus, bất kỳ dữ liệu tính tiền/tồn kho. Server luôn đọc lại từ Sheet khi tạo đơn.
+
+**Stale-while-revalidate:** Có cache → render ngay + fetch background. Chỉ cập nhật khi response mới thành công. Không xóa cache trước khi có data mới. TTL 3 phút.
+
+**Invalidation:** TTL hết → revalidate; refocus tab → revalidate. Menu "⚡ Quản lý Shop" → "Update lại cache" → `CacheService.getScriptCache().remove("products")`. Không hard invalidate phía client.
+
+**GAS:** getProducts lưu CacheService key `"products"`, TTL 3 phút. getProductBySlug: tìm trong cache nếu có; không thì đọc Sheet.
+
+**Rủi ro:** Giá/tồn kho — server luôn đọc Sheet khi thanh toán. Màn hình trống — fetch lỗi thì giữ data cũ + toast.
+
+---
+
+## §4. Lock
+
+**createOrder** toàn bộ trong `LockService.getScriptLock()`: `lock.waitLock(15000)` → thực hiện → `lock.releaseLock()` (try/finally).
+
+**orderCode:** Đọc B1 Config → +1 → ghi B1; trong lock. Không dùng `Date.now()`.
+
+**Tồn kho:** createOrder **không trừ** tồn kho; chỉ kiểm tra stock >= quantity để từ chối nếu hết hàng. **Chỉ trừ tồn kho khi webhook báo PAID:** trong handleWebhook, khi body.code === "00" và body.success === true, trước khi cập nhật order sang PAID thì trừ stock cho từng item của đơn (trong lock). Rủi ro oversell: hai đơn cùng sản phẩm cuối có thể cùng được link thanh toán, ai thanh toán trước thì trừ trước; người sau có thể PAID nhưng stock đã âm → xử lý như oversell (frontend/shop liên hệ).
+
+**checkoutUrl chỉ khi đã ghi đơn thành công:** Sau khi `appendRow` vào Orders, bắt buộc đọc lại dòng cuối (getLastRow, cột 1 = orderCode). Chỉ khi giá trị đọc được === orderCode vừa dùng mới được trả `checkoutUrl`. Nếu không khớp → coi ghi thất bại, return lỗi (vd "Ghi đơn vào Sheet thất bại, vui lòng thử lại."), không trả checkoutUrl (createOrder không trừ tồn kho nên không cần hoàn trả).
+
+**Oversell:** Stock âm → lỗi rõ ràng; frontend thông báo liên hệ shop.
+
+---
+
+## §5. Bảo mật
+
+**Validate createOrder:** customerName, phone, email, address, items (mảng không rỗng; mỗi item có id, quantity > 0). Email hợp lệ, SĐT 10–11 số. Reject ngay nếu sai.
+
+**Honeypot:** Trường ẩn (vd `name="website"`). Có giá trị → bot → reject.
+
+**Rate limit:** Key `rateLimit_`+phone+email. 5 lần/60 giây. Đếm mọi request. Trả "Vui lòng đợi 1 phút..." khi vượt.
+
+**Giới hạn:** body > 10KB hoặc items > 20 → reject.
+
+**getOrderStatus:** Validate orderCode (số nguyên dương). Chỉ trả `orderCode`, `status`, `totalAmount`. Không trả thông tin cá nhân.
+
+**OrderSuccess:** Không tin query. Luôn gọi getOrderStatus; chỉ hiển thị thành công khi `status === "PAID"`.
+
+---
+
+## §6. PayOS
+
+**Không Sandbox.** Lấy key: [Dashboard PayOS](https://my.payos.vn/) → kênh thanh toán → Client ID, API Key, Checksum Key.
+
+**Tạo link:** `POST https://api-merchant.payos.vn/v2/payment-requests`. Header: `x-client-id`, `x-api-key`. orderCode integer unique (counter Config). amount integer VND. returnUrl/cancelUrl: `{FRONTEND_URL}/order-success?orderCode=...`, `.../payment-failed?orderCode=...`. expiredAt: 30 phút. **description: bắt buộc, tối đa 25 ký tự** — cắt `description.substring(0, 25)` trước khi gửi.
+
+**Chữ ký (tạo link):** 5 trường alphabet: amount, cancelUrl, description, orderCode, returnUrl. HMAC_SHA256 với CHECKSUM_KEY. **Bắt buộc gửi trường `signature` trong body** (cùng amount, orderCode, description, returnUrl, cancelUrl, expiredAt) khi POST tới `payment-requests`.
+
+**Response:** Thành công khi 2xx, `code === "00"`, có `data.checkoutUrl`. Lỗi: 401→PAYOS_AUTH_ERROR; 429→PAYOS_RATE_LIMIT; timeout→PAYOS_TIMEOUT; còn lại→PAYOS_CREATE_LINK_FAILED. Thất bại → không lưu đơn (createOrder không trừ tồn kho nên không cần hoàn trả).
+
+**Confirm-webhook:** Menu "⚡ Quản lý Shop" → "Xác thực Webhook PayOS" gọi `POST .../confirm-webhook` với body `{ "webhookUrl": "<HOOKDECK_SOURCE_URL>" }`.
+
+**Response chuẩn:** `{ success: boolean, data?: any, error?: string }`. Đơn PENDING mồ côi (PayOS lỗi sau khi tạo) không tự động xóa; user xóa tay khi review Sheet.
+
+---
+
+## §7. Webhook (Hookdeck)
+
+**Flow:** PayOS → Hookdeck → GAS doPost. Retry 3 lần, exponential backoff.
+
+**Body webhook (theo doc PayOS):** code, desc, success, data, signature. Doc PayOS không định nghĩa data.status cho webhook thanh toán; coi thành công khi body.code === "00" và body.success === true.
+
+**Verify signature:** Lấy `data` từ body → sort key alphabet → `key1=value1&key2=value2&...` (null→""). HMAC_SHA256 → hex. So với `signature`. GAS: `Utilities.computeHmacSha256Signature` → convert byte array sang hex.
+
+**Signature sai:** return 200, ghi WebhookLogs.
+
+**Signature đúng:** Coi thanh toán thành công khi body.code === "00" và body.success === true (doc PayOS không có data.status). Idempotency — đơn đã PAID → return 200; chưa PAID thì trừ tồn kho cho từng item của đơn (trong lock), rồi cập nhật: status = PAID, payosTransactionId = ..., updatedAt, webhookRawLog. Luôn return 200.
+
+---
+
+## §8. PRICE_CHANGED
+
+Server tính **actualTotal** từ Sheet (salePrice nếu saleEndDate chưa qua, else price). So với `payload.expectedTotal` và giá từng item (`Number(...)`).
+
+Khác → không tạo đơn, không gọi PayOS, return `{ success: false, error: "PRICE_CHANGED", data: { updatedItems: [...], actualTotal } }`.
+
+Frontend: cập nhật giỏ từ updatedItems/actualTotal, toast "Giá một số sản phẩm đã thay đổi...", user bấm Thanh toán lại.
+
+---
+
+## §9. Seed
+
+Menu "⚡ Quản lý Shop" → "Khởi tạo dữ liệu mẫu". Products có data → hỏi ghi đè. Ghi toàn bộ mẫu (hardcode trong code.gs). Nội dung phù hợp ngành hàng dự án. Quy tắc: mỗi sản phẩm ≥1 tag=category; ≥4 "Hàng mới", ≥3 "Bán chạy", ≥4 "Giảm giá"; 1 isFeatured; đủ category; **giá < 20.000 VND** để test.
+
+---
+
+## §10. React & Frontend (Landing page)
+
+**Kiểu giao diện:** Landing page — một trang chính chứa Hero, block sản phẩm/gói giá, form đặt hàng (hoặc section/modal chọn gói + thông tin khách). Dùng GAS: getProducts, createOrder, getOrderStatus. Sản phẩm và đơn hàng lưu trên Sheets như §2; thanh toán qua PayOS, redirect về `/order-success` và `/payment-failed`.
+
+**Design:** Light/Dark, prefers-color-scheme. Primary #13ec80, Secondary #ff8c42, BG Dark #102219, BG Light #f6f8f7. Font: Space Grotesk + Noto Sans hoặc cặp serif + sans phù hợp (vd Cormorant Garamond + Inter). Responsive: sm 640, md 768, lg 1024. Header: logo, CTA (điện thoại/Zalo), trên mobile có thể hamburger. Không bắt buộc cart sidebar/bottom sheet — có thể form chọn gói ngay trên trang hoặc drawer/modal đơn giản.
+
+**Bo tròn đồng bộ:** rounded-md (tags, badges, nút nhỏ); rounded-lg (inputs, buttons); rounded-xl (cards, panels, form); rounded-2xl (Hero); rounded-full (chips, icon tròn).
+
+**Màu theo design system:** Form: `input-bg`, `input-border`, `input-text`; Surface: `surface-bg`, `surface-border`, `surface-muted`; Text: `text-primary`, `text-muted`. Không dùng gray-* mặc định của Tailwind. Icon: currentColor → container dùng text-text-primary hoặc text-white (nền tối).
+
+**Đồng bộ theme (bắt buộc):**
+- **Nền trang:** Một nguồn duy nhất `--page-bg` (định nghĩa trong :root và .dark). Body, Layout, Header phải dùng `bg-page-bg` hoặc `bg-page-bg/95` — không dùng `bg-white`, `bg-bg-light`, `bg-bg-dark` tách rời.
+- **Kiểm tra cả hai theme:** Mọi thay đổi UI phải verify Light và Dark; contrast đủ trên cả hai nền.
+
+**Context:** ProductContext (getProducts từ GAS, stale-while-revalidate, sessionStorage, refocus revalidate) để hiển thị sản phẩm/gói trên landing. CartContext (LocalStorage, sync focus) hoặc state cục bộ cho "chọn gói + số lượng" trước khi gọi createOrder.
+
+**Routes:** `/` (landing), `/order-success?orderCode=...`, `/payment-failed?orderCode=...`. Có thể dùng React Router với ít route trên hoặc hash/query trên một entry. Không bắt buộc `/product/:slug` hay `/cart` riêng nếu landing không có trang chi tiết sản phẩm hay trang giỏ riêng.
+
+**Nội dung landing:** Hero (có thể dùng sản phẩm isFeatured từ getProducts); block giới thiệu/tin cậy; block sản phẩm hoặc bảng giá (dữ liệu từ getProducts hoặc cấu hình); form hoặc CTA "Đặt hàng" → nhập thông tin + chọn items → createOrder → redirect checkoutUrl. CTA phụ: gọi điện, Zalo.
+
+**OrderSuccess:** orderCode từ query → getOrderStatus. PAID: hiển thị thành công, xóa giỏ/state đơn. PENDING: poll 5s, tối đa 2 phút. Không tìm thấy: "Liên hệ shop." Không tin query; chỉ tin getOrderStatus.
+
+**Error:** Toast khi lỗi. PRICE_CHANGED: cập nhật items/actualTotal + toast, user bấm Thanh toán lại. Nút thanh toán disabled + spinner khi đang tạo đơn.
+
+---
+
+## §11. Deployment
+
+**Frontend:** Vercel bắt buộc. `VITE_APP_GAS_URL`. SPA: rewrite mọi path → index.html.
+
+**GAS:** Deploy Web App, Execute as Me, Anyone. Copy URL.
+
+**Hookdeck:** Source → Destination = URL doPost GAS. Copy Source URL → PayOS Webhook URL, HOOKDECK_SOURCE_URL.

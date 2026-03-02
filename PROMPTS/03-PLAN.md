@@ -1,0 +1,119 @@
+# Kế hoạch thực hiện – Landing page bán hàng
+
+Áp dụng cho **bất kỳ** landing bán hàng cùng stack. Thứ tự đọc: **03-PLAN** → 02-CONSTRAINTS → 01-FEATURES. Mỗi phase tham chiếu ràng buộc áp dụng.
+
+**Khi áp dụng cho dự án mới:** Bảng "Trạng thái so với codebase" cập nhật theo từng repo (có thể bỏ dấu ✅ và điền lại khi implement). Cần tinh chỉnh theo dự án: seed + category trong GAS, nội dung landing (Hero, cam kết, footer), SĐT/Zalo, branding — xem 01-FEATURES và 02-CONSTRAINTS phần "Tinh chỉnh".
+
+---
+
+## Trạng thái so với codebase (khi triển khai)
+
+Đối chiếu features với code; cập nhật khi implement.
+
+- **GAS:** `gas/code.gs` — doGet/doPost, Sheets tự tạo, cache 3 phút, Lock, PayOS, webhook, menu ⚡ Quản lý Shop.
+- **Frontend:** React Router (`/`, `/order-success`, `/payment-failed`), ProductContext, CartContext, ThemeProvider, form đặt hàng modal, PRICE_CHANGED, getOrderStatus + poll.
+- **Deploy:** Vercel (VITE_APP_GAS_URL), GAS Web App, Hookdeck — xem `docs/SETUP-GUIDE.md`.
+
+---
+
+## Giai đoạn 1: Backend (GAS)
+
+**Mục tiêu:** File `code.gs` xử lý toàn bộ API.
+
+**Công việc:**
+- doGet, doPost, CORS (§1)
+- Tự tạo sheet Products, Orders, Config, WebhookLogs (§2)
+- getProducts (cache 3 phút), getProductBySlug, getOrderStatus (§1, §3)
+- createOrder: Lock, counter Config, validate, tính actualTotal, PRICE_CHANGED, gọi PayOS, ghi Orders (§4, §5, §6, §8)
+- Webhook: verify signature, idempotency, WebhookLogs (§7)
+- Menu "⚡ Quản lý Shop": Khởi tạo dữ liệu mẫu, Xác thực Webhook PayOS, Update lại cache (§9)
+- Bảo mật: validate input, honeypot, rate limit (§5)
+
+**Tham chiếu:** §1, §2, §3, §4, §5, §6, §7, §8, §9
+
+**Done khi:**
+- [x] doGet/doPost trả JSON đúng format
+- [x] getProducts có cache 3 phút
+- [x] createOrder dùng Lock, gọi PayOS, ghi Orders (không trừ tồn kho; webhook trừ khi PAID)
+- [x] Webhook verify signature, trừ tồn kho khi PAID, cập nhật PAID
+- [x] Menu "⚡ Quản lý Shop" có 3 mục
+
+---
+
+## Giai đoạn 2: State & API Service
+
+**Mục tiêu:** Nền tảng React, Context, gọi GAS.
+
+**Công việc:**
+- Cài react-router-dom (ít route: `/`, `/order-success`, `/payment-failed`), react-hot-toast
+- Types/Interface (`src/types.ts`)
+- API Service (`src/services/api.ts`) gọi GAS
+- ThemeProvider (Light/Dark)
+- CartContext (LocalStorage, sync focus) hoặc state chọn gói + items
+- ProductContext (getProducts, stale-while-revalidate, sessionStorage, refocus revalidate) (§3, §10)
+
+**Tham chiếu:** §3, §10
+
+**Done khi:**
+- [x] CartContext hoặc state chọn gói lưu/đọc LocalStorage
+- [x] ProductContext fetch getProducts, cache SWR
+
+---
+
+## Giai đoạn 3: UI Components (Landing)
+
+**Mục tiêu:** Components tái sử dụng theo design system cho landing page.
+
+**Công việc:**
+- Header (Logo, CTA điện thoại/Zalo, Theme toggle; mobile: hamburger nếu cần)
+- Footer
+- Hero (có thể carousel hoặc 1 slide; dữ liệu từ getProducts / isFeatured) (§10)
+- Block sản phẩm / bảng giá: card gói hoặc ProductCard (ảnh, nhãn, giá, nút chọn mua)
+- Form đặt hàng (section trên trang hoặc modal: thông tin khách, items đã chọn, honeypot, nút thanh toán; xử lý PRICE_CHANGED) (§5, §8)
+- (Tùy chọn) SkeletonCard, CountdownTimer nếu có khuyến mãi theo giờ
+
+**Tham chiếu:** §5, §8, §10
+
+**Done khi:**
+- [x] Header có CTA (điện thoại, Zalo), theme toggle
+- [x] Hero hiển thị nội dung từ getProducts / isFeatured
+- [x] Block giá/sản phẩm có nút chọn mua, gửi vào form/state
+- [x] Form đặt hàng có honeypot, gọi createOrder, xử lý PRICE_CHANGED
+
+---
+
+## Giai đoạn 4: Pages (Landing)
+
+**Mục tiêu:** Luồng người dùng landing: một trang chính + order-success / payment-failed.
+
+**Công việc:**
+- Landing (trang chính `/`): Hero, block giới thiệu/tin cậy, block sản phẩm hoặc bảng giá (từ getProducts), form đặt hàng (hoặc modal) → createOrder → redirect checkoutUrl (§10)
+- OrderSuccessPage (`/order-success?orderCode=...`): getOrderStatus, poll PENDING, hiển thị PAID/thất bại/không tìm thấy (§5, §10)
+- OrderFailedPage (`/payment-failed?orderCode=...`)
+- (Tùy chọn) NotFoundPage nếu dùng React Router
+
+**Tham chiếu:** §5, §8, §10
+
+**Done khi:**
+- [x] Landing: Hero, block giá/sản phẩm, form đặt hàng, redirect PayOS
+- [x] OrderSuccess: getOrderStatus, poll PENDING, hiển thị PAID/không tìm thấy
+- [x] OrderFailed hiển thị thông báo, CTA thử lại hoặc liên hệ
+
+---
+
+## Giai đoạn 5: Hoàn thiện & Deploy
+
+**Mục tiêu:** Deploy, kiểm tra, tài liệu.
+
+**Công việc:**
+- Kiểm tra luồng đầy đủ
+- Deploy Vercel, GAS, Hookdeck (§11)
+- Sinh `SETUP-GUIDE.md` hoặc `docs/SETUP-GUIDE.md` (hướng dẫn từng bước)
+
+**Tham chiếu:** §11
+
+**Done khi:**
+- [ ] Frontend deploy Vercel
+- [ ] GAS deploy Web App
+- [ ] Hookdeck + PayOS webhook cấu hình
+- [ ] Setup guide có checklist đầy đủ
