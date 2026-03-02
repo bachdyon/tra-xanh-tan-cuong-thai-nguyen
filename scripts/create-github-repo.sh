@@ -1,7 +1,7 @@
 #!/bin/sh
 # Tạo repo GitHub và push. Chạy sau khi: gh auth login
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 REPO_NAME="tra-xanh-tan-cuong-thai-nguyen"
 if git remote get-url origin 2>/dev/null; then
   echo "Remote origin đã tồn tại. Chỉ push."
