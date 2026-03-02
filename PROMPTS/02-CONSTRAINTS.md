@@ -34,6 +34,8 @@
 
 **Products:** id, name, slug, category, tags JSON, price, salePrice, saleEndDate, images JSON, thumbnail, description, specs JSON, features JSON, stock, sku, isFeatured. Category: enum theo dự án. Tags: JSON array, chứa category + nhãn phụ (Hàng mới, Bán chạy, Giảm giá). Bỏ `isNew`, dùng tag "Hàng mới"; giữ `isFeatured`.
 
+**Không trả về dòng trống:** getProducts / fetchProductsFromSheet phải **lọc bỏ** mọi dòng mà cả `id` và `name` đều rỗng (sau trim). `getLastRow()` có thể bao gồm hàng trống hoặc có format → không được đưa vào danh sách trả về; chỉ trả các sản phẩm hợp lệ (có ít nhất id hoặc name).
+
 **Orders:** orderCode, customerName, phone, email, address, items JSON, totalAmount, payosPaymentId, payosTransactionId, status, createdAt, updatedAt, webhookRawLog. Mọi đơn PENDING/PAID lưu đầy đủ.
 
 **WebhookLogs:** rawBody, computedSignature, receivedSignature, error, timestamp. Chỉ ghi khi lỗi.
@@ -138,15 +140,11 @@ Menu "⚡ Quản lý Shop" → "Khởi tạo dữ liệu mẫu". Products có da
 
 **Kiểu giao diện:** Landing page — một trang chính chứa Hero, block sản phẩm/gói giá, form đặt hàng (hoặc section/modal chọn gói + thông tin khách). Dùng GAS: getProducts, createOrder, getOrderStatus. Sản phẩm và đơn hàng lưu trên Sheets như §2; thanh toán qua PayOS, redirect về `/order-success` và `/payment-failed`.
 
-**Design:** Light/Dark, prefers-color-scheme. Primary #13ec80, Secondary #ff8c42, BG Dark #102219, BG Light #f6f8f7. Font: Space Grotesk + Noto Sans hoặc cặp serif + sans phù hợp (vd Cormorant Garamond + Inter). Responsive: sm 640, md 768, lg 1024. Header: logo, CTA (điện thoại/Zalo), trên mobile có thể hamburger. Không bắt buộc cart sidebar/bottom sheet — có thể form chọn gói ngay trên trang hoặc drawer/modal đơn giản.
+**Design:** Tuân thủ thiết kế có sẵn nếu codebase đã có — thường người dùng cung cấp code với giao diện có sẵn. Gợi ý khi tự thiết kế: Primary #13ec80, Secondary #ff8c42, font (vd Space Grotesk + Noto Sans). Responsive: sm 640, md 768, lg 1024. Header: logo, CTA (điện thoại/Zalo), trên mobile có thể hamburger. Không bắt buộc cart sidebar/bottom sheet — có thể form chọn gói ngay trên trang hoặc drawer/modal đơn giản.
 
 **Bo tròn đồng bộ:** rounded-md (tags, badges, nút nhỏ); rounded-lg (inputs, buttons); rounded-xl (cards, panels, form); rounded-2xl (Hero); rounded-full (chips, icon tròn).
 
 **Màu theo design system:** Form: `input-bg`, `input-border`, `input-text`; Surface: `surface-bg`, `surface-border`, `surface-muted`; Text: `text-primary`, `text-muted`. Không dùng gray-* mặc định của Tailwind. Icon: currentColor → container dùng text-text-primary hoặc text-white (nền tối).
-
-**Đồng bộ theme (bắt buộc):**
-- **Nền trang:** Một nguồn duy nhất `--page-bg` (định nghĩa trong :root và .dark). Body, Layout, Header phải dùng `bg-page-bg` hoặc `bg-page-bg/95` — không dùng `bg-white`, `bg-bg-light`, `bg-bg-dark` tách rời.
-- **Kiểm tra cả hai theme:** Mọi thay đổi UI phải verify Light và Dark; contrast đủ trên cả hai nền.
 
 **Context:** ProductContext (getProducts từ GAS, stale-while-revalidate, sessionStorage, refocus revalidate) để hiển thị sản phẩm/gói trên landing. CartContext (LocalStorage, sync focus) hoặc state cục bộ cho "chọn gói + số lượng" trước khi gọi createOrder.
 

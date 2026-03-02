@@ -1,10 +1,15 @@
+---
+description: Tính năng landing page bán hàng (khách hàng + quản trị)
+alwaysApply: true
+---
+
 # Landing page bán hàng – Tính năng (Features)
 
-Áp dụng cho **bất kỳ** landing page bán hàng cùng stack (React + GAS + Sheets + PayOS). Tính năng cho khách hàng và quản trị; không đề cập kỹ thuật. **Tham chiếu:** 02-CONSTRAINTS, 03-PLAN.
+Áp dụng cho **bất kỳ** landing page bán hàng cùng stack (React + GAS + Sheets + PayOS). Tính năng cho khách hàng và quản trị; không đề cập kỹ thuật. **Tham chiếu:** .cursor/rules/technical-constraints.mdc (§), landing-plan.mdc.
 
 ---
 
-QUAN TRỌNG: 
+QUAN TRỌNG:
 - "Hỏi người dùng nếu bạn chưa rõ họ muốn tạo landing page để làm gì?"
 - "Hỏi người dùng nếu bạn chưa biết họ sẽ có những gói sản phẩm / dịch vụ nào, giá từng gói là bao nhiêu?"
 - "Hỏi người dùng đã có thiết kế chưa? Nếu có tuyệt đối tuân thủ thiết kế."

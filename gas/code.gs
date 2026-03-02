@@ -157,6 +157,8 @@ function fetchProductsFromSheet() {
   var list = [];
   for (var i = 0; i < data.length; i++) {
     var p = rowToProduct(data[i], headers);
+    // Bỏ qua dòng trống (getLastRow có thể bao gồm hàng có format/trống)
+    if (String(p.id).trim() === '' && String(p.name).trim() === '') continue;
     list.push(p);
   }
   return list;

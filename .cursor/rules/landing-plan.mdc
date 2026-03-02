@@ -1,8 +1,13 @@
+---
+description: Kế hoạch thực hiện landing page bán hàng (giai đoạn 1–5)
+alwaysApply: true
+---
+
 # Kế hoạch thực hiện – Landing page bán hàng
 
-Áp dụng cho **bất kỳ** landing bán hàng cùng stack. Thứ tự đọc: **03-PLAN** → 02-CONSTRAINTS → 01-FEATURES. Mỗi phase tham chiếu ràng buộc áp dụng.
+Áp dụng cho **bất kỳ** landing bán hàng cùng stack. Thứ tự đọc: **landing-plan** → technical-constraints → landing-features. Mỗi phase tham chiếu ràng buộc áp dụng (§ = technical-constraints.mdc).
 
-**Khi áp dụng cho dự án mới:** Bảng "Trạng thái so với codebase" cập nhật theo từng repo (có thể bỏ dấu ✅ và điền lại khi implement). Cần tinh chỉnh theo dự án: seed + category trong GAS, nội dung landing (Hero, cam kết, footer), SĐT/Zalo, branding — xem 01-FEATURES và 02-CONSTRAINTS phần "Tinh chỉnh".
+**Khi áp dụng cho dự án mới:** Bảng "Trạng thái so với codebase" cập nhật theo từng repo (có thể bỏ dấu ✅ và điền lại khi implement). Cần tinh chỉnh theo dự án: seed + category trong GAS, nội dung landing (Hero, cam kết, footer), SĐT/Zalo, branding — xem landing-features và technical-constraints phần "Tinh chỉnh".
 
 ---
 

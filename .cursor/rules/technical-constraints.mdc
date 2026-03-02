@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Ràng buộc kỹ thuật – Landing page bán hàng
 
-Áp dụng cho **bất kỳ** landing bán hàng cùng stack (React + GAS + Sheets + PayOS). Tuân thủ tuyệt đối khi xây dựng dự án. Nguồn: PROMPTS/02-CONSTRAINTS.md
+Áp dụng cho **bất kỳ** landing bán hàng cùng stack (React + GAS + Sheets + PayOS). Tuân thủ tuyệt đối khi xây dựng dự án. Tham chiếu thêm: .cursor/rules/landing-features.mdc, landing-plan.mdc.
 
 **Tham chiếu nhanh:** §1 GAS · §2 Sheets · §3 Cache · §4 Lock · §5 Bảo mật · §6 PayOS · §7 Webhook · §8 PRICE_CHANGED · §9 Seed · §10 React (Landing) · §11 Deploy
 
@@ -40,6 +40,8 @@ alwaysApply: true
 **Tự tạo sheet:** Products, Orders, Config, WebhookLogs — GAS tự tạo nếu chưa có. User chỉ cần tạo 1 spreadsheet, dán code. Không yêu cầu user nhập Sheet ID.
 
 **Products:** id, name, slug, category, tags JSON, price, salePrice, saleEndDate, images JSON, thumbnail, description, specs JSON, features JSON, stock, sku, isFeatured. Category: enum theo dự án. Tags: JSON array, chứa category + nhãn phụ (Hàng mới, Bán chạy, Giảm giá). Bỏ `isNew`, dùng tag "Hàng mới"; giữ `isFeatured`.
+
+**Không trả về dòng trống:** getProducts / fetchProductsFromSheet phải **lọc bỏ** mọi dòng mà cả `id` và `name` đều rỗng (sau trim). `getLastRow()` có thể bao gồm hàng trống hoặc có format → không được đưa vào danh sách trả về; chỉ trả các sản phẩm hợp lệ (có ít nhất id hoặc name).
 
 **Orders:** orderCode, customerName, phone, email, address, items JSON, totalAmount, payosPaymentId, payosTransactionId, status, createdAt, updatedAt, webhookRawLog. Mọi đơn PENDING/PAID lưu đầy đủ.
 
@@ -145,13 +147,11 @@ Menu "⚡ Quản lý Shop" → "Khởi tạo dữ liệu mẫu". Products có da
 
 **Kiểu giao diện:** Landing page — một trang chính chứa Hero, block sản phẩm/gói giá, form đặt hàng (hoặc section/modal chọn gói + thông tin khách). Dùng GAS: getProducts, createOrder, getOrderStatus. Sản phẩm và đơn hàng lưu trên Sheets như §2; thanh toán qua PayOS, redirect về `/order-success` và `/payment-failed`.
 
-**Design:** Light/Dark, prefers-color-scheme. Primary #13ec80, Secondary #ff8c42, BG Dark #102219, BG Light #f6f8f7. Font: Space Grotesk + Noto Sans hoặc cặp serif + sans phù hợp (vd Cormorant Garamond + Inter). Responsive: sm 640, md 768, lg 1024. Header: logo, CTA (điện thoại/Zalo), trên mobile có thể hamburger. Không bắt buộc cart sidebar/bottom sheet — có thể form chọn gói ngay trên trang hoặc drawer/modal đơn giản.
+**Design:** Tuân thủ thiết kế có sẵn nếu codebase đã có — thường người dùng cung cấp code với giao diện có sẵn. Gợi ý khi tự thiết kế: Primary/Secondary, font (vd Space Grotesk + Noto Sans). Responsive: sm 640, md 768, lg 1024. Header: logo, CTA (điện thoại/Zalo), trên mobile có thể hamburger. Không bắt buộc cart sidebar/bottom sheet — có thể form chọn gói ngay trên trang hoặc drawer/modal đơn giản.
 
 **Bo tròn:** rounded-md (tags, badges, nút nhỏ); rounded-lg (inputs, buttons); rounded-xl (cards, panels, form); rounded-2xl (Hero); rounded-full (chips, icon tròn).
 
 **Màu:** Form: input-bg, input-border, input-text; Surface: surface-bg, surface-border, surface-muted; Text: text-primary, text-muted. Không dùng gray-*. Icon: currentColor → text-text-primary hoặc text-white (nền tối).
-
-**Đồng bộ theme:** body, Layout, Header dùng `bg-page-bg` (một nguồn --page-bg). Cấm bg-white, bg-bg-light/bg-bg-dark tách rời. Verify cả Light và Dark.
 
 **Context:** ProductContext (getProducts từ GAS, stale-while-revalidate, sessionStorage, refocus revalidate) để hiển thị sản phẩm/gói trên landing. CartContext (LocalStorage, sync focus) hoặc state cục bộ cho “chọn gói + số lượng” trước khi gọi createOrder.
 

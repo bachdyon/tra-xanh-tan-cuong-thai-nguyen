@@ -28,9 +28,11 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(!products.length);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchProducts = useCallback(async (background = false) => {
+    if (!background) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const data = await getProducts();
       setProducts(data);
@@ -38,19 +40,26 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data, at: Date.now() }));
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Không tải được sản phẩm');
+      if (!background) {
+        setError(e instanceof Error ? e.message : 'Không tải được sản phẩm');
+      }
       setProducts((prev) => prev);
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchProducts();
+    // Có cache → revalidate nền, không hiện loading. Không có cache → loading rồi fetch.
+    if (products.length > 0) {
+      fetchProducts(true);
+    } else {
+      fetchProducts(false);
+    }
   }, []);
 
   useEffect(() => {
-    const onFocus = () => fetchProducts();
+    const onFocus = () => fetchProducts(true);
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [fetchProducts]);

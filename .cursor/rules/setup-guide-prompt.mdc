@@ -1,0 +1,68 @@
+---
+description: Prompt sinh hướng dẫn setup cho người mới (ít am hiểu công nghệ)
+alwaysApply: false
+---
+
+# Prompt sinh hướng dẫn setup – Landing bán hàng
+
+Hướng dẫn sinh ra **áp dụng cho từng dự án** (mỗi shop/landing một lần). Khi **copy** hướng dẫn từ project khác sang, chỉ cần đổi tên ví dụ (vd "Cửa hàng Trà Tân Cương" → tên cửa hàng của dự án); phần kỹ thuật (GAS, PayOS, Vercel, Hookdeck) giữ nguyên. Hướng dẫn chia **từng bước nhỏ**, mỗi bước **một việc rõ ràng**. Làm đúng thứ tự thì website bán hàng sẽ chạy được. **Mục tiêu:** Người dùng chỉ cần thao tác đơn giản nhất, **ít bước nhất** nhưng **chính xác nhất**.
+
+---
+
+## Khi nào dùng
+
+Khi cần **sinh hoặc cập nhật** `docs/SETUP-GUIDE.md` (hướng dẫn setup cho người lần đầu, không am hiểu công nghệ). Áp dụng prompt dưới đây.
+
+---
+
+## Nội dung prompt (gửi cho AI)
+
+```
+Hãy sinh ra hướng dẫn setup chi tiết cho người lần đầu, không am hiểu công nghệ, theo đúng các quy tắc bên dưới. Hướng dẫn là cho **một dự án cụ thể** (một landing bán hàng); nếu copy từ project khác sang thì chỉ đổi tên ví dụ (tên cửa hàng, tên trang tính), không đổi bước kỹ thuật.
+
+---
+
+## Nội dung prompt
+
+Bạn cần tạo **hướng dẫn setup chi tiết** để một người **lần đầu**, **không am hiểu công nghệ** có thể làm theo và cấu hình đúng từng bước. Hướng dẫn phải **ngắn gọn**, **chính xác**, **ít bước nhất có thể** và **chỉ gồm các bước người dùng thực sự phải làm** — không thêm bước cho việc mà code/backend đã tự làm (tạo sheet, tạo bảng config, v.v.). **Deploy lên Vercel là bắt buộc** (không ghi là tùy chọn).
+
+### Thông tin bắt buộc khi sinh hướng dẫn (phải đúng với thực tế)
+
+- **PayOS:** PayOS **không có Sandbox**. Vào **[Dashboard PayOS](https://my.payos.vn/)** → tạo hoặc lấy **kênh thanh toán** trước → sau đó mới lấy được **Client ID**, **API Key**, **Checksum Key**. Không đề cập Sandbox.
+- **Google Sheet:** **Tất cả các sheet** (Products, Orders, Config, WebhookLogs) được **code khởi tạo tự động** khi cần. Người dùng **chỉ cần tạo một trang tính Google (spreadsheet)** và **đặt tên**; **không** hướng dẫn tạo từng sheet (Products, Orders, …) thủ công.
+- **Deploy frontend:** **Deploy lên Vercel là bước bắt buộc** để có URL production; không ghi "tùy chọn" hay "nếu muốn".
+
+### Quy tắc bắt buộc khi viết hướng dẫn
+
+1. **Một hành động rõ ràng mỗi bước**  
+   Mỗi bước chỉ một thao tác cụ thể (ví dụ: "Bấm **Extensions**" — một bước; "Chọn **Apps Script**" — bước tiếp theo). Không gộp nhiều việc vào một câu.
+
+2. **Dùng đúng tên trên giao diện**  
+   Ghi chính xác tên menu, nút, ô nhập (tiếng Anh/Việt đúng như trên màn hình). VD: **Extensions** → **Apps Script** → **Deploy** → **New deployment**. Tránh mô tả chung ("vào mục cài đặt").
+
+3. **Chỉ rõ "ở đâu" và "sao chép cái gì"**  
+   Khi cần copy URL/key: nói rõ vị trí ("URL nằm ở đầu trang sau khi bấm Deploy") và "sao chép toàn bộ, không thừa không thiếu ký tự".
+
+4. **Kết quả mong đợi**  
+   Sau bước dễ nhầm, thêm một câu ngắn: "Bạn sẽ thấy …" hoặc "Màn hình sẽ hiển thị …" để người dùng tự kiểm tra.
+
+5. **Ngắn gọn**  
+   Mỗi bước 1–2 câu. Thuật ngữ (API Key, Webhook, Deploy) chỉ dùng khi cần, kèm giải thích trong ngoặc một lần. Ưu tiên danh sách đánh số, không viết đoạn văn dài.
+
+6. **Đúng thứ tự thực tế**  
+   Thứ tự bước khớp với thao tác trên từng trang. Nếu bước sau cần kết quả từ bước trước (ví dụ "dán URL đã copy ở bước 2"), ghi rõ "URL lấy ở bước 2".
+
+7. **Lưu ý chỉ khi dễ sai**  
+   Chỉ thêm "Lưu ý" / "Quan trọng" khi thiếu sẽ gây lỗi thường gặp (VD: "Chọn **Anyone** trong Who has access, nếu chọn Only myself thì website bên ngoài không gọi được API.").
+
+8. **Chỉ bước người dùng thực sự phải làm — không thừa**  
+   Đọc kỹ code (backend, config, .env.example) để biết cái gì **code đã tự làm**. Không thêm bước tạo/cấu hình những thứ code tự tạo (VD: mọi sheet đều được code khởi tạo tự động — user chỉ tạo một trang tính và đặt tên; config, menu seed, v.v. do code xử lý). Chỉ ghi các bước **bắt buộc người dùng thao tác tay**. Nếu không chắc một bước có cần không, kiểm tra trong code xem có `getSheet`/`getOrCreate…Sheet` — nếu code có `insertSheet` hoặc getOrCreate tương đương thì không hướng dẫn tạo thủ công.
+
+### Định dạng đầu ra
+
+- Tiêu đề: "Hướng dẫn setup website bán hàng (lần đầu)"
+- Phần lớn: danh sách đánh số (1, 2, 3, …), mỗi bước có thể có tiêu đề con in đậm.
+- Cuối mỗi nhóm lớn (VD: xong Google Sheet, xong Hookdeck): một dòng tóm tắt "Bạn đã hoàn thành …" để người dùng biết điểm dừng an toàn.
+
+CỰC KỲ QUAN TRỌNG: Phải sinh hướng dẫn theo đúng các quy tắc trên, bắt buộc, không được thỏa hiệp.
+```
