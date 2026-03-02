@@ -54,7 +54,7 @@ alwaysApply: true
 - Types/Interface (`src/types.ts`)
 - API Service (`src/services/api.ts`) gọi GAS
 - CartContext (LocalStorage, sync focus) hoặc state chọn gói + items
-- ProductContext (getProducts, stale-while-revalidate, sessionStorage, refocus revalidate) (§3, §10)
+- ProductContext (getProducts, stale-while-revalidate, sessionStorage, refocus revalidate) (§3, §10). **Có cache hoặc refocus: không bật loading** — chỉ revalidate nền (§3).
 
 **Tham chiếu:** §3, §10
 

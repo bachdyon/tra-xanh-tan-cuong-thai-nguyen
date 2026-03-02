@@ -52,6 +52,8 @@
 
 **Stale-while-revalidate:** Có cache → render ngay + fetch background. Chỉ cập nhật khi response mới thành công. Không xóa cache trước khi có data mới. TTL 3 phút.
 
+**Không loading khi đã có cache:** Khi mount hoặc refocus tab, nếu đã có dữ liệu cache (sessionStorage/localStorage) thì **không được** bật trạng thái loading; chỉ revalidate nền (fetch background, cập nhật khi xong). Chỉ hiển thị loading khi lần đầu load khi **không có** cache.
+
 **Invalidation:** TTL hết → revalidate; refocus tab → revalidate. Menu "⚡ Quản lý Shop" → "Update lại cache" → `CacheService.getScriptCache().remove("products")`. Không hard invalidate phía client.
 
 **GAS:** getProducts lưu CacheService key `"products"`, TTL 3 phút. getProductBySlug: tìm trong cache nếu có; không thì đọc Sheet.
