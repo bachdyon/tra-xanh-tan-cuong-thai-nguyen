@@ -264,18 +264,21 @@ function validateCreateOrder(body) {
 
 // ——— PayOS ———
 function createPayOSLink(orderCode, amount, description) {
-  var clientId = getProp('PAYOS_CLIENT_ID');
-  var apiKey = getProp('PAYOS_API_KEY');
-  var checksumKey = getProp('PAYOS_CHECKSUM_KEY');
-  var frontendUrl = getProp('FRONTEND_URL');
+  var clientId = (getProp('PAYOS_CLIENT_ID') || '').trim();
+  var apiKey = (getProp('PAYOS_API_KEY') || '').trim();
+  var checksumKey = (getProp('PAYOS_CHECKSUM_KEY') || '').trim();
+  var frontendUrl = (getProp('FRONTEND_URL') || '').trim();
   if (!clientId || !apiKey || !checksumKey || !frontendUrl) {
     return { ok: false, error: 'PAYOS_CONFIG_ERROR' };
   }
+  orderCode = parseInt(orderCode, 10);
+  amount = parseInt(Math.round(amount), 10);
   var desc = (description || 'Don hang #' + orderCode).substring(0, 25);
   var returnUrl = frontendUrl.replace(/\/$/, '') + '/order-success?orderCode=' + orderCode;
   var cancelUrl = frontendUrl.replace(/\/$/, '') + '/payment-failed?orderCode=' + orderCode;
   var expiredAt = Math.floor(Date.now() / 1000) + PAYMENT_EXPIRE_MINUTES * 60;
 
+  // Chuỗi ký theo PayOS: key sort alphabet — amount, cancelUrl, description, orderCode, returnUrl. Value raw (không encodeURIComponent).
   var signData = 'amount=' + amount + '&cancelUrl=' + cancelUrl + '&description=' + desc + '&orderCode=' + orderCode + '&returnUrl=' + returnUrl;
   var signature = Utilities.computeHmacSha256Signature(signData, checksumKey);
   var sigHex = signature.map(function(b) { return ('0' + (b < 0 ? b + 256 : b).toString(16)).slice(-2); }).join('');

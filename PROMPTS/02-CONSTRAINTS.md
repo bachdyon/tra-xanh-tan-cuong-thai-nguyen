@@ -98,7 +98,7 @@
 
 **Tạo link:** `POST https://api-merchant.payos.vn/v2/payment-requests`. Header: `x-client-id`, `x-api-key`. orderCode integer unique (counter Config). amount integer VND. returnUrl/cancelUrl: `{FRONTEND_URL}/order-success?orderCode=...`, `.../payment-failed?orderCode=...`. expiredAt: 30 phút. **description: bắt buộc, tối đa 25 ký tự** — cắt `description.substring(0, 25)` trước khi gửi.
 
-**Chữ ký (tạo link):** 5 trường alphabet: amount, cancelUrl, description, orderCode, returnUrl. HMAC_SHA256 với CHECKSUM_KEY. **Bắt buộc gửi trường `signature` trong body** (cùng amount, orderCode, description, returnUrl, cancelUrl, expiredAt) khi POST tới `payment-requests`.
+**Chữ ký (tạo link):** 5 trường alphabet: amount, cancelUrl, description, orderCode, returnUrl. HMAC_SHA256 với CHECKSUM_KEY. **Chuỗi data ký dùng giá trị raw** (không encodeURIComponent cho cancelUrl, returnUrl, description); PayOS verify bằng raw — encode gây lỗi "Mã kiểm tra(signature) không hợp lệ". Bắt buộc gửi trường `signature` trong body khi POST tới `payment-requests`.
 
 **Response:** Thành công khi 2xx, `code === "00"`, có `data.checkoutUrl`. Lỗi: 401→PAYOS_AUTH_ERROR; 429→PAYOS_RATE_LIMIT; timeout→PAYOS_TIMEOUT; còn lại→PAYOS_CREATE_LINK_FAILED. Thất bại → không lưu đơn (createOrder không trừ tồn kho nên không cần hoàn trả).
 
