@@ -44,7 +44,11 @@ function getOrdersSheet() {
 }
 
 function getConfigSheet() {
-  return getOrCreateSheet('Config', ['LATEST_ORDER_ID', 'counter']);
+  var sheet = getOrCreateSheet('Config', ['LATEST_ORDER_ID', 1000]);
+  var b1 = sheet.getRange('B1').getValue();
+  if (b1 === '' || b1 === undefined || isNaN(Number(b1)))
+    sheet.getRange('B1').setValue(1000);
+  return sheet;
 }
 
 function getWebhookLogsSheet() {
@@ -262,61 +266,9 @@ function validateCreateOrder(body) {
   return { ok: true };
 }
 
-// ——— PayOS ———
-function createPayOSLink(orderCode, amount, description) {
-  var clientId = (getProp('PAYOS_CLIENT_ID') || '').trim();
-  var apiKey = (getProp('PAYOS_API_KEY') || '').trim();
-  var checksumKey = (getProp('PAYOS_CHECKSUM_KEY') || '').trim();
-  var frontendUrl = (getProp('FRONTEND_URL') || '').trim();
-  if (!clientId || !apiKey || !checksumKey || !frontendUrl) {
-    return { ok: false, error: 'PAYOS_CONFIG_ERROR' };
-  }
-  orderCode = parseInt(orderCode, 10);
-  amount = parseInt(Math.round(amount), 10);
-  var desc = (description || 'Don hang #' + orderCode).substring(0, 25);
-  var returnUrl = frontendUrl.replace(/\/$/, '') + '/order-success?orderCode=' + orderCode;
-  var cancelUrl = frontendUrl.replace(/\/$/, '') + '/payment-failed?orderCode=' + orderCode;
-  var expiredAt = Math.floor(Date.now() / 1000) + PAYMENT_EXPIRE_MINUTES * 60;
-
-  // Chuỗi ký theo PayOS: key sort alphabet — amount, cancelUrl, description, orderCode, returnUrl. Value raw (không encodeURIComponent).
-  var signData = 'amount=' + amount + '&cancelUrl=' + cancelUrl + '&description=' + desc + '&orderCode=' + orderCode + '&returnUrl=' + returnUrl;
-  var signature = Utilities.computeHmacSha256Signature(signData, checksumKey);
-  var sigHex = signature.map(function(b) { return ('0' + (b < 0 ? b + 256 : b).toString(16)).slice(-2); }).join('');
-
-  var payload = {
-    amount: amount,
-    orderCode: orderCode,
-    description: desc,
-    returnUrl: returnUrl,
-    cancelUrl: cancelUrl,
-    expiredAt: expiredAt,
-    signature: sigHex
-  };
-
-  var options = {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(payload),
-    headers: { 'x-client-id': clientId, 'x-api-key': apiKey },
-    muteHttpExceptions: true
-  };
-
-  try {
-    var resp = UrlFetchApp.fetch('https://api-merchant.payos.vn/v2/payment-requests', options);
-    var code = resp.getResponseCode();
-    var json = JSON.parse(resp.getContentText());
-    if (code >= 200 && code < 300 && json.code === '00' && json.data && json.data.checkoutUrl)
-      return { ok: true, checkoutUrl: json.data.checkoutUrl };
-    if (code === 401) return { ok: false, error: 'PAYOS_AUTH_ERROR' };
-    if (code === 429) return { ok: false, error: 'PAYOS_RATE_LIMIT' };
-    return { ok: false, error: json.desc || 'PAYOS_CREATE_LINK_FAILED' };
-  } catch (e) {
-    return { ok: false, error: 'PAYOS_TIMEOUT' };
-  }
-}
-
 // ——— createOrder (trong Lock) ———
-function createOrderLocked(body) {
+// Logic tham khảo code chạy được: đọc Config/Products trực tiếp, tạo link PayOS inline (signData raw, cKey.trim(), hex (b & 0xff)).
+function createOrder(body) {
   var validation = validateCreateOrder(body);
   if (!validation.ok)
     return { success: false, error: validation.error };
@@ -324,31 +276,58 @@ function createOrderLocked(body) {
   if (!checkRateLimit(body.phone, body.email))
     return { success: false, error: 'Vui lòng đợi 1 phút rồi thử lại.' };
 
-  var expectedTotal = Number(body.expectedTotal);
+  var clientId = (getProp('PAYOS_CLIENT_ID') || '').trim();
+  var apiKey = (getProp('PAYOS_API_KEY') || '').trim();
+  var checksumKey = (getProp('PAYOS_CHECKSUM_KEY') || '').trim();
+  var frontendUrl = (getProp('FRONTEND_URL') || '').trim();
+  if (!clientId || !apiKey || !checksumKey || !frontendUrl)
+    return { success: false, error: 'PAYOS_CONFIG_ERROR' };
+
+  var configSheet = getConfigSheet();
+  var configData = configSheet.getDataRange().getValues();
+  var orderCode = 1000;
+  for (var ci = 0; ci < configData.length; ci++) {
+    if (configData[ci][0] === 'LATEST_ORDER_ID') {
+      var current = Number(configData[ci][1]);
+      if (isNaN(current) || current < 1000) current = 1000;
+      orderCode = current + 1;
+      configSheet.getRange(ci + 1, 2).setValue(orderCode);
+      break;
+    }
+  }
+
+  var productsSheet = getProductsSheet();
+  var productsData = productsSheet.getDataRange().getValues();
+  var productMap = {};
+  for (var r = 1; r < productsData.length; r++) {
+    var id = Number(productsData[r][0]);
+    productMap[id] = { row: r + 1, data: productsData[r] };
+  }
+
+  var expectedTotal = Number(body.expectedTotal) || 0;
   var items = body.items;
   var updatedItems = [];
   var actualTotal = 0;
 
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
-    var product = getProductById(it.id);
-    if (!product)
-      return { success: false, error: 'Sản phẩm không tồn tại: ' + it.id };
+    var pid = Number(it.id);
     var qty = parseInt(it.quantity, 10) || 0;
-    if (qty < 1)
-      return { success: false, error: 'Số lượng không hợp lệ' };
-    if (Number(product.stock) < qty)
-      return { success: false, error: 'Sản phẩm "' + product.name + '" không đủ tồn kho' };
-    var unitPrice = getEffectivePrice(product);
-    var lineTotal = unitPrice * qty;
+    if (!productMap[pid] || qty <= 0)
+      return { success: false, error: 'Sản phẩm không hợp lệ' };
+    var prod = productMap[pid];
+    var stock = Number(prod.data[13]) || 0;
+    if (stock < qty)
+      return { success: false, error: 'Sản phẩm "' + (prod.data[1] || '') + '" không đủ tồn kho. Vui lòng liên hệ shop.' };
+
+    var price = Number(prod.data[5]) || 0;
+    var salePrice = Number(prod.data[6]) || 0;
+    var saleEndDate = prod.data[7];
+    if (salePrice > 0 && saleEndDate && new Date(saleEndDate) > new Date())
+      price = salePrice;
+    var lineTotal = price * qty;
     actualTotal += lineTotal;
-    updatedItems.push({
-      id: product.id,
-      name: product.name,
-      quantity: qty,
-      unitPrice: unitPrice,
-      total: lineTotal
-    });
+    updatedItems.push({ id: pid, name: prod.data[1], quantity: qty, unitPrice: price, total: lineTotal });
   }
 
   if (Math.abs(actualTotal - expectedTotal) > 1) {
@@ -359,40 +338,85 @@ function createOrderLocked(body) {
     };
   }
 
-  var orderCode = getOrderCounter() + 1;
-  setOrderCounter(orderCode);
+  var description = ('Don hang #' + orderCode).substring(0, 25);
+  var returnUrl = frontendUrl.replace(/\/$/, '') + '/order-success?orderCode=' + orderCode;
+  var cancelUrl = frontendUrl.replace(/\/$/, '') + '/payment-failed?orderCode=' + orderCode;
+  var expiredAt = Math.floor(Date.now() / 1000) + PAYMENT_EXPIRE_MINUTES * 60;
+  var amount = Math.round(actualTotal);
+  var cKey = (checksumKey || '').trim();
 
-  var payos = createPayOSLink(orderCode, Math.round(actualTotal), 'Tra Tan Cuong #' + orderCode);
-  if (!payos.ok)
-    return { success: false, error: payos.error || 'Tạo link thanh toán thất bại' };
+  var signData = 'amount=' + amount + '&cancelUrl=' + cancelUrl + '&description=' + description + '&orderCode=' + orderCode + '&returnUrl=' + returnUrl;
+  var signature = Utilities.computeHmacSha256Signature(signData, cKey).map(function(b) { return ('0' + (b & 0xff).toString(16)).slice(-2); }).join('');
 
+  var payosBody = {
+    orderCode: orderCode,
+    amount: amount,
+    description: description,
+    returnUrl: returnUrl,
+    cancelUrl: cancelUrl,
+    expiredAt: expiredAt,
+    signature: signature
+  };
+
+  var options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-client-id': clientId, 'x-api-key': apiKey },
+    payload: JSON.stringify(payosBody),
+    muteHttpExceptions: true
+  };
+
+  var resp;
+  try {
+    resp = UrlFetchApp.fetch('https://api-merchant.payos.vn/v2/payment-requests', options);
+  } catch (e) {
+    return { success: false, error: 'PAYOS_TIMEOUT' };
+  }
+
+  var respText = resp.getContentText();
+  var respJson = {};
+  try { respJson = respText ? JSON.parse(respText) : {}; } catch (e) {}
+  var respCode = resp.getResponseCode();
+
+  if (respCode >= 400) {
+    if (respCode === 401) return { success: false, error: 'PAYOS_AUTH_ERROR' };
+    if (respCode === 429) return { success: false, error: 'PAYOS_RATE_LIMIT' };
+    var payosMsg = (respJson.error && (respJson.error.message || respJson.error.code)) || respJson.desc || respJson.message || ('HTTP ' + respCode);
+    return { success: false, error: payosMsg || 'PAYOS_CREATE_LINK_FAILED' };
+  }
+
+  if (respJson.code !== '00' || !respJson.data || !respJson.data.checkoutUrl) {
+    var msg = respJson.desc || respJson.message || (respJson.code !== undefined ? String(respJson.code) : '') || (respText ? respText.substring(0, 100) : '');
+    return { success: false, error: msg || 'PAYOS_CREATE_LINK_FAILED' };
+  }
+
+  var now = new Date().toISOString();
+  var ordersSheet = getOrdersSheet();
   var orderRow = [
     orderCode,
-    String(body.customerName).trim(),
-    String(body.phone).trim(),
-    String(body.email).trim(),
-    String(body.address).trim(),
+    String(body.customerName || '').trim(),
+    String(body.phone || '').trim(),
+    String(body.email || '').trim(),
+    String(body.address || '').trim(),
     JSON.stringify(updatedItems),
     actualTotal,
-    '',
+    respJson.data.id || '',
     '',
     'PENDING',
-    new Date().toISOString(),
-    new Date().toISOString(),
+    now,
+    now,
     ''
   ];
-
-  var ordersSheet = getOrdersSheet();
   ordersSheet.appendRow(orderRow);
 
   var lastRow = ordersSheet.getLastRow();
-  var writtenCode = ordersSheet.getRange(lastRow, 1).getValue();
-  if (Number(writtenCode) !== orderCode)
+  var writtenCode = lastRow >= 1 ? Number(ordersSheet.getRange(lastRow, 1).getValue()) : null;
+  if (writtenCode !== orderCode)
     return { success: false, error: 'Ghi đơn vào Sheet thất bại, vui lòng thử lại.' };
 
   return {
     success: true,
-    data: { orderCode: orderCode, checkoutUrl: payos.checkoutUrl }
+    data: { checkoutUrl: respJson.data.checkoutUrl, orderCode: orderCode }
   };
 }
 
@@ -547,7 +571,7 @@ function doPost(e) {
     var lock = LockService.getScriptLock();
     try {
       lock.waitLock(LOCK_WAIT_MS);
-      var createResult = createOrderLocked(body);
+      var createResult = createOrder(body);
       return jsonResponse(createResult);
     } catch (err) {
       return jsonResponse({ success: false, error: String(err.message) });
@@ -628,7 +652,8 @@ function menuSeedData() {
     sheet.appendRow(seed[i]);
   }
   CacheService.getScriptCache().remove(CACHE_KEY_PRODUCTS);
-  SpreadsheetApp.getUi().alert('Đã khởi tạo ' + seed.length + ' sản phẩm mẫu.');
+  getConfigSheet();
+  SpreadsheetApp.getUi().alert('Đã khởi tạo ' + seed.length + ' sản phẩm mẫu và đảm bảo Config có LATEST_ORDER_ID (counter=1000 nếu mới).');
 }
 
 // Seed: Trà Tân Cương, giá < 20.000 VND để test. Category: TRA_TAN_CUONG_XANH, COMBO_2_GOI, COMBO_5_GOI

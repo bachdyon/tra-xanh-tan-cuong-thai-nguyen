@@ -1,0 +1,26 @@
+---
+description: Cấu hình Vercel cho SPA — bắt buộc rewrite để tránh 404 khi vào /order-success, /payment-failed
+globs: vercel.json
+alwaysApply: false
+---
+
+# Rule: vercel.json (Vercel SPA)
+
+Áp dụng khi tạo/sửa **vercel.json** trong project landing React (Vite + React Router).
+
+## Ràng buộc
+
+**Deploy frontend lên Vercel bắt buộc** (theo .cursor/rules/technical-constraints.mdc §11 Deploy). Ứng dụng là **SPA**: mọi route (`/`, `/order-success`, `/payment-failed`) do React Router xử lý trên **một** file `index.html`.
+
+- Nếu **không** có `vercel.json` với **rewrites**: khi user (hoặc PayOS) mở trực tiếp URL `https://xxx.vercel.app/order-success?orderCode=...` thì Vercel tìm file tại path `/order-success` → không có → **404**. Trang thanh toán thành công / thất bại sẽ bị lỗi.
+- **Bắt buộc** có file **vercel.json** ở root project với nội dung rewrite mọi path về `/index.html`:
+
+```json
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+**Không** xóa hoặc sửa rewrites này. Không thay `destination` bằng path khác. Nếu thêm config khác (headers, env, v.v.) vẫn phải **giữ** `rewrites` như trên.

@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Kế hoạch thực hiện – Landing page bán hàng
 
-Áp dụng cho **bất kỳ** landing bán hàng cùng stack. Thứ tự đọc: **landing-plan** → technical-constraints → landing-features. Mỗi phase tham chiếu ràng buộc áp dụng (§ = technical-constraints.mdc).
+Áp dụng cho **bất kỳ** landing bán hàng cùng stack. Thứ tự đọc: **landing-plan** → .cursor/rules/technical-constraints.mdc → landing-features. **Quy ước:** §1, §2, … §11 trong file này chỉ các mục trong **.cursor/rules/technical-constraints.mdc** (vd §1 = GAS, §2 = Sheets, §3 = Cache, §11 = Deploy).
 
 **Khi áp dụng cho dự án mới:** Bảng "Trạng thái so với codebase" cập nhật theo từng repo (có thể bỏ dấu ✅ và điền lại khi implement). Cần tinh chỉnh theo dự án: seed + category trong GAS, nội dung landing (Hero, cam kết, footer), SĐT/Zalo, branding — xem landing-features và technical-constraints phần "Tinh chỉnh".
 
@@ -26,15 +26,15 @@ alwaysApply: true
 **Mục tiêu:** File `code.gs` xử lý toàn bộ API.
 
 **Công việc:**
-- doGet, doPost, CORS (§1)
-- Tự tạo sheet Products, Orders, Config, WebhookLogs (§2)
-- getProducts (cache 3 phút), getProductBySlug, getOrderStatus (§1, §3). getProducts **lọc bỏ dòng trống** (id và name đều rỗng) — không trả về hàng trống/format từ Sheet (§2).
-- createOrder: Lock, counter Config, validate, tính actualTotal, PRICE_CHANGED, gọi PayOS, ghi Orders (§4, §5, §6, §8)
-- Webhook: verify signature, idempotency, WebhookLogs (§7)
-- Menu "⚡ Quản lý Shop": Khởi tạo dữ liệu mẫu, Xác thực Webhook PayOS, Update lại cache (§9)
-- Bảo mật: validate input, honeypot, rate limit (§5)
+- doGet, doPost, CORS (technical-constraints §1)
+- Tự tạo sheet Products, Orders, Config, WebhookLogs (technical-constraints §2)
+- getProducts (cache 3 phút), getProductBySlug, getOrderStatus (technical-constraints §1, §3). getProducts **lọc bỏ dòng trống** (id và name đều rỗng) — không trả về hàng trống/format từ Sheet (technical-constraints §2).
+- createOrder: Lock, counter Config, validate, tính actualTotal, PRICE_CHANGED, gọi PayOS, ghi Orders (technical-constraints §4, §5, §6, §8)
+- Webhook: verify signature, idempotency, WebhookLogs (technical-constraints §7)
+- Menu "⚡ Quản lý Shop": Khởi tạo dữ liệu mẫu, Xác thực Webhook PayOS, Update lại cache (technical-constraints §9)
+- Bảo mật: validate input, honeypot, rate limit (technical-constraints §5)
 
-**Tham chiếu:** §1, §2, §3, §4, §5, §6, §7, §8, §9
+**Tham chiếu:** .cursor/rules/technical-constraints.mdc §1, §2, §3, §4, §5, §6, §7, §8, §9
 
 **Done khi:**
 - [x] doGet/doPost trả JSON đúng format
@@ -54,9 +54,9 @@ alwaysApply: true
 - Types/Interface (`src/types.ts`)
 - API Service (`src/services/api.ts`) gọi GAS
 - CartContext (LocalStorage, sync focus) hoặc state chọn gói + items
-- ProductContext (getProducts, stale-while-revalidate, sessionStorage, refocus revalidate) (§3, §10). **Có cache hoặc refocus: không bật loading** — chỉ revalidate nền (§3).
+- ProductContext (getProducts, stale-while-revalidate, sessionStorage, refocus revalidate) (technical-constraints §3, §10). **Có cache hoặc refocus: không bật loading** — chỉ revalidate nền (technical-constraints §3).
 
-**Tham chiếu:** §3, §10
+**Tham chiếu:** .cursor/rules/technical-constraints.mdc §3, §10
 
 **Done khi:**
 - [x] CartContext hoặc state chọn gói lưu/đọc LocalStorage
@@ -71,12 +71,12 @@ alwaysApply: true
 **Công việc:**
 - Header (Logo, CTA điện thoại/Zalo; mobile: hamburger nếu cần)
 - Footer
-- Hero (có thể carousel hoặc 1 slide; dữ liệu từ getProducts / isFeatured) (§10)
+- Hero (có thể carousel hoặc 1 slide; dữ liệu từ getProducts / isFeatured) (technical-constraints §10)
 - Block sản phẩm / bảng giá: card gói hoặc ProductCard (ảnh, nhãn, giá, nút chọn mua)
-- Form đặt hàng (section trên trang hoặc modal: thông tin khách, items đã chọn, honeypot, nút thanh toán; xử lý PRICE_CHANGED) (§5, §8)
+- Form đặt hàng (section trên trang hoặc modal: thông tin khách, items đã chọn, honeypot, nút thanh toán; xử lý PRICE_CHANGED) (technical-constraints §5, §8)
 - (Tùy chọn) SkeletonCard, CountdownTimer nếu có khuyến mãi theo giờ
 
-**Tham chiếu:** §5, §8, §10
+**Tham chiếu:** .cursor/rules/technical-constraints.mdc §5, §8, §10
 
 **Done khi:**
 - [x] Header có CTA (điện thoại, Zalo)
@@ -91,12 +91,12 @@ alwaysApply: true
 **Mục tiêu:** Luồng người dùng landing: một trang chính + order-success / payment-failed.
 
 **Công việc:**
-- Landing (trang chính `/`): Hero, block giới thiệu/tin cậy, block sản phẩm hoặc bảng giá (từ getProducts), form đặt hàng (hoặc modal) → createOrder → redirect checkoutUrl (§10)
-- OrderSuccessPage (`/order-success?orderCode=...`): getOrderStatus, poll PENDING, hiển thị PAID/thất bại/không tìm thấy (§5, §10)
+- Landing (trang chính `/`): Hero, block giới thiệu/tin cậy, block sản phẩm hoặc bảng giá (từ getProducts), form đặt hàng (hoặc modal) → createOrder → redirect checkoutUrl (technical-constraints §10)
+- OrderSuccessPage (`/order-success?orderCode=...`): getOrderStatus, poll PENDING, hiển thị PAID/thất bại/không tìm thấy (technical-constraints §5, §10)
 - OrderFailedPage (`/payment-failed?orderCode=...`)
 - (Tùy chọn) NotFoundPage nếu dùng React Router
 
-**Tham chiếu:** §5, §8, §10
+**Tham chiếu:** .cursor/rules/technical-constraints.mdc §5, §8, §10
 
 **Done khi:**
 - [x] Landing: Hero, block giá/sản phẩm, form đặt hàng, redirect PayOS
@@ -111,10 +111,10 @@ alwaysApply: true
 
 **Công việc:**
 - Kiểm tra luồng đầy đủ
-- Deploy Vercel, GAS, Hookdeck (§11)
+- Deploy Vercel, GAS, Hookdeck (technical-constraints §11)
 - Sinh `SETUP-GUIDE.md` hoặc `docs/SETUP-GUIDE.md` (hướng dẫn từng bước)
 
-**Tham chiếu:** §11
+**Tham chiếu:** .cursor/rules/technical-constraints.mdc §11
 
 **Done khi:**
 - [ ] Frontend deploy Vercel

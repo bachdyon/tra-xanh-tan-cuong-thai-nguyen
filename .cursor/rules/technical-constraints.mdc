@@ -7,7 +7,7 @@ alwaysApply: true
 
 Áp dụng cho **bất kỳ** landing bán hàng cùng stack (React + GAS + Sheets + PayOS). Tuân thủ tuyệt đối khi xây dựng dự án. Tham chiếu thêm: .cursor/rules/landing-features.mdc, landing-plan.mdc.
 
-**Tham chiếu nhanh:** §1 GAS · §2 Sheets · §3 Cache · §4 Lock · §5 Bảo mật · §6 PayOS · §7 Webhook · §8 PRICE_CHANGED · §9 Seed · §10 React (Landing) · §11 Deploy
+**Tham chiếu nhanh:** §1 GAS · §2 Sheets · §3 Cache · §4 Lock · §5 Bảo mật · §6 PayOS · §7 Webhook · §8 PRICE_CHANGED · §9 Seed · §10 React (Landing) · §11 Deploy. **Nguồn §:** Các mục §0–§11 trong file này là định nghĩa; rule khác khi dùng § phải chỉ rõ **.cursor/rules/technical-constraints.mdc** (vd "technical-constraints §1" hoặc "theo .cursor/rules/technical-constraints.mdc §11").
 
 **Tinh chỉnh theo dự án (chỉ trong code/config):** (1) **Seed GAS** — mảng sản phẩm mẫu trong `code.gs`, category enum, tags theo ngành hàng. (2) **Nội dung frontend** — Hero, block cam kết, footer (copy, slogan). (3) **Liên hệ** — SĐT, Zalo mỗi shop một bộ; nên dùng config/env. (4) **Branding** — màu, font, logo (§10) tùy chọn.
 

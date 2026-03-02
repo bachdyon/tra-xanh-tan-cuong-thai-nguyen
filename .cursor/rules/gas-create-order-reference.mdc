@@ -1,0 +1,179 @@
+---
+description: Reference implementation createOrder + PayOS (GAS) — giữ đúng logic để tránh lỗi chữ ký
+alwaysApply: true
+---
+
+# Reference: createOrder (GAS) – PayOS signature đúng
+
+Khi sửa `gas/code.gs` liên quan **createOrder**, **PayOS**, **Config**, **Orders** phải **giữ đúng** logic trong code mẫu dưới đây. Đã xác nhận chạy được; thay đổi signData / checksumKey / hex có thể gây "Mã kiểm tra(signature) không hợp lệ".
+
+## Điểm bắt buộc giữ nguyên
+
+- **Config:** Đọc sheet Config, tìm dòng `LATEST_ORDER_ID`, counter ở cột 2; nếu NaN hoặc < 1000 thì coi 1000.
+- **Products:** productMap theo id; cột 5=price, 6=salePrice, 7=saleEndDate, 13=stock, 1=name.
+- **signData:** Giá trị **raw**, không encodeURIComponent; thứ tự key alphabet.
+- **cKey:** `(checksumKey || '').trim()` chỉ trim.
+- **Hex:** `(b & 0xff).toString(16)` khi convert byte array sang hex.
+- Chỉ trả `checkoutUrl` sau khi appendRow Orders và xác nhận dòng cuối đúng `orderCode`.
+
+---
+
+## Code mẫu đầy đủ: createOrder
+
+```javascript
+// ——— createOrder (trong Lock) ———
+// Logic tham khảo code chạy được: đọc Config/Products trực tiếp, tạo link PayOS inline (signData raw, cKey.trim(), hex (b & 0xff)).
+function createOrder(body) {
+  var validation = validateCreateOrder(body);
+  if (!validation.ok)
+    return { success: false, error: validation.error };
+
+  if (!checkRateLimit(body.phone, body.email))
+    return { success: false, error: 'Vui lòng đợi 1 phút rồi thử lại.' };
+
+  var clientId = (getProp('PAYOS_CLIENT_ID') || '').trim();
+  var apiKey = (getProp('PAYOS_API_KEY') || '').trim();
+  var checksumKey = (getProp('PAYOS_CHECKSUM_KEY') || '').trim();
+  var frontendUrl = (getProp('FRONTEND_URL') || '').trim();
+  if (!clientId || !apiKey || !checksumKey || !frontendUrl)
+    return { success: false, error: 'PAYOS_CONFIG_ERROR' };
+
+  var configSheet = getConfigSheet();
+  var configData = configSheet.getDataRange().getValues();
+  var orderCode = 1000;
+  for (var ci = 0; ci < configData.length; ci++) {
+    if (configData[ci][0] === 'LATEST_ORDER_ID') {
+      var current = Number(configData[ci][1]);
+      if (isNaN(current) || current < 1000) current = 1000;
+      orderCode = current + 1;
+      configSheet.getRange(ci + 1, 2).setValue(orderCode);
+      break;
+    }
+  }
+
+  var productsSheet = getProductsSheet();
+  var productsData = productsSheet.getDataRange().getValues();
+  var productMap = {};
+  for (var r = 1; r < productsData.length; r++) {
+    var id = Number(productsData[r][0]);
+    productMap[id] = { row: r + 1, data: productsData[r] };
+  }
+
+  var expectedTotal = Number(body.expectedTotal) || 0;
+  var items = body.items;
+  var updatedItems = [];
+  var actualTotal = 0;
+
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var pid = Number(it.id);
+    var qty = parseInt(it.quantity, 10) || 0;
+    if (!productMap[pid] || qty <= 0)
+      return { success: false, error: 'Sản phẩm không hợp lệ' };
+    var prod = productMap[pid];
+    var stock = Number(prod.data[13]) || 0;
+    if (stock < qty)
+      return { success: false, error: 'Sản phẩm "' + (prod.data[1] || '') + '" không đủ tồn kho. Vui lòng liên hệ shop.' };
+
+    var price = Number(prod.data[5]) || 0;
+    var salePrice = Number(prod.data[6]) || 0;
+    var saleEndDate = prod.data[7];
+    if (salePrice > 0 && saleEndDate && new Date(saleEndDate) > new Date())
+      price = salePrice;
+    var lineTotal = price * qty;
+    actualTotal += lineTotal;
+    updatedItems.push({ id: pid, name: prod.data[1], quantity: qty, unitPrice: price, total: lineTotal });
+  }
+
+  if (Math.abs(actualTotal - expectedTotal) > 1) {
+    return {
+      success: false,
+      error: 'PRICE_CHANGED',
+      data: { updatedItems: updatedItems, actualTotal: actualTotal }
+    };
+  }
+
+  var description = ('Don hang #' + orderCode).substring(0, 25);
+  var returnUrl = frontendUrl.replace(/\/$/, '') + '/order-success?orderCode=' + orderCode;
+  var cancelUrl = frontendUrl.replace(/\/$/, '') + '/payment-failed?orderCode=' + orderCode;
+  var expiredAt = Math.floor(Date.now() / 1000) + PAYMENT_EXPIRE_MINUTES * 60;
+  var amount = Math.round(actualTotal);
+  var cKey = (checksumKey || '').trim();
+
+  var signData = 'amount=' + amount + '&cancelUrl=' + cancelUrl + '&description=' + description + '&orderCode=' + orderCode + '&returnUrl=' + returnUrl;
+  var signature = Utilities.computeHmacSha256Signature(signData, cKey).map(function(b) { return ('0' + (b & 0xff).toString(16)).slice(-2); }).join('');
+
+  var payosBody = {
+    orderCode: orderCode,
+    amount: amount,
+    description: description,
+    returnUrl: returnUrl,
+    cancelUrl: cancelUrl,
+    expiredAt: expiredAt,
+    signature: signature
+  };
+
+  var options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-client-id': clientId, 'x-api-key': apiKey },
+    payload: JSON.stringify(payosBody),
+    muteHttpExceptions: true
+  };
+
+  var resp;
+  try {
+    resp = UrlFetchApp.fetch('https://api-merchant.payos.vn/v2/payment-requests', options);
+  } catch (e) {
+    return { success: false, error: 'PAYOS_TIMEOUT' };
+  }
+
+  var respText = resp.getContentText();
+  var respJson = {};
+  try { respJson = respText ? JSON.parse(respText) : {}; } catch (e) {}
+  var respCode = resp.getResponseCode();
+
+  if (respCode >= 400) {
+    if (respCode === 401) return { success: false, error: 'PAYOS_AUTH_ERROR' };
+    if (respCode === 429) return { success: false, error: 'PAYOS_RATE_LIMIT' };
+    var payosMsg = (respJson.error && (respJson.error.message || respJson.error.code)) || respJson.desc || respJson.message || ('HTTP ' + respCode);
+    return { success: false, error: payosMsg || 'PAYOS_CREATE_LINK_FAILED' };
+  }
+
+  if (respJson.code !== '00' || !respJson.data || !respJson.data.checkoutUrl) {
+    var msg = respJson.desc || respJson.message || (respJson.code !== undefined ? String(respJson.code) : '') || (respText ? respText.substring(0, 100) : '');
+    return { success: false, error: msg || 'PAYOS_CREATE_LINK_FAILED' };
+  }
+
+  var now = new Date().toISOString();
+  var ordersSheet = getOrdersSheet();
+  var orderRow = [
+    orderCode,
+    String(body.customerName || '').trim(),
+    String(body.phone || '').trim(),
+    String(body.email || '').trim(),
+    String(body.address || '').trim(),
+    JSON.stringify(updatedItems),
+    actualTotal,
+    respJson.data.id || '',
+    '',
+    'PENDING',
+    now,
+    now,
+    ''
+  ];
+  ordersSheet.appendRow(orderRow);
+
+  var lastRow = ordersSheet.getLastRow();
+  var writtenCode = lastRow >= 1 ? Number(ordersSheet.getRange(lastRow, 1).getValue()) : null;
+  if (writtenCode !== orderCode)
+    return { success: false, error: 'Ghi đơn vào Sheet thất bại, vui lòng thử lại.' };
+
+  return {
+    success: true,
+    data: { checkoutUrl: respJson.data.checkoutUrl, orderCode: orderCode }
+  };
+}
+```
+
+Khi refactor hoặc tối ưu createOrder: **không** đổi cách tạo `signData`, `cKey`, `signature` và thứ tự/kiểu dữ liệu gửi PayOS.
