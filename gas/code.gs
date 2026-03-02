@@ -575,7 +575,38 @@ function menuConfirmWebhook() {
     SpreadsheetApp.getUi().alert('Chưa cấu hình HOOKDECK_SOURCE_URL trong Script Properties.');
     return;
   }
-  SpreadsheetApp.getUi().alert('Đăng ký Webhook PayOS:\n1. Vào Dashboard PayOS → Cài đặt kênh → Webhook URL.\n2. Dán URL sau (đã copy từ Hookdeck Source):\n\n' + url + '\n\nSau khi lưu, PayOS sẽ gửi webhook qua Hookdeck tới GAS.');
+  var clientId = getProp('PAYOS_CLIENT_ID');
+  var apiKey = getProp('PAYOS_API_KEY');
+  if (!clientId || !apiKey) {
+    SpreadsheetApp.getUi().alert('Chưa cấu hình PAYOS_CLIENT_ID hoặc PAYOS_API_KEY.');
+    return;
+  }
+  var result = confirmPayOSWebhook(url, clientId, apiKey);
+  if (result.ok) {
+    SpreadsheetApp.getUi().alert('Xác thực webhook thành công!\n\nURL đã đăng ký:\n' + url);
+  } else {
+    SpreadsheetApp.getUi().alert('Lỗi: ' + result.error + '\n\nURL cần đăng ký (có thể dán thủ công vào PayOS):\n' + url);
+  }
+}
+
+function confirmPayOSWebhook(webhookUrl, clientId, apiKey) {
+  var options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-client-id': clientId, 'x-api-key': apiKey },
+    payload: JSON.stringify({ webhookUrl: webhookUrl }),
+    muteHttpExceptions: true
+  };
+  try {
+    var resp = UrlFetchApp.fetch('https://api-merchant.payos.vn/confirm-webhook', options);
+    var code = resp.getResponseCode();
+    var json = JSON.parse(resp.getContentText());
+    if (code >= 200 && code < 300 && json.code === '00')
+      return { ok: true };
+    return { ok: false, error: json.desc || json.error || resp.getContentText() };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 }
 
 function menuSeedData() {
@@ -595,17 +626,14 @@ function menuSeedData() {
   SpreadsheetApp.getUi().alert('Đã khởi tạo ' + seed.length + ' sản phẩm mẫu.');
 }
 
-// Seed: Trà Tân Cương, giá < 20.000 VND để test. Category: GOI_TRAI_NGHIEM, GOI_THUONG_THUC, GOI_TRI_AN
+// Seed: Trà Tân Cương, giá < 20.000 VND để test. Category: TRA_TAN_CUONG_XANH, COMBO_2_GOI, COMBO_5_GOI
 function getSeedProducts() {
   var now = new Date();
   var saleEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   var saleEndStr = saleEnd.toISOString().split('T')[0];
   return [
-    ['1', 'Gói Trải Nghiệm 500g', 'goi-trai-nghiem-500g', 'GOI_TRAI_NGHIEM', '["Trà xanh","Hàng mới"]', 15000, 12000, saleEndStr, '[]', 'https://images.unsplash.com/photo-1563822249548-9a72b6353cd1?w=400', 'Trà nõn tôm Tân Cương 500g, đóng gói hút chân không.', '[]', '[]', 100, 'TN500', false],
-    ['2', 'Gói Thưởng Thức 1kg', 'goi-thuong-thuc-1kg', 'GOI_THUONG_THUC', '["Trà xanh","Bán chạy","Giảm giá"]', 18000, 15000, saleEndStr, '[]', 'https://images.unsplash.com/photo-1563822249548-9a72b6353cd1?w=400', 'Combo 2 hộp 500g, tiết kiệm hơn.', '[]', '[]', 80, 'TT1K', true],
-    ['3', 'Gói Tri Ân 2.5kg', 'goi-tri-an-2-5kg', 'GOI_TRI_AN', '["Trà xanh","Giảm giá"]', 20000, 18000, saleEndStr, '[]', 'https://images.unsplash.com/photo-1563822249548-9a72b6353cd1?w=400', 'Combo 5 hộp, giá sỉ, quà biếu.', '[]', '[]', 50, 'TA25', false],
-    ['4', 'Trà Nõn Tôm Cao Cấp 200g', 'tra-non-tom-cao-cap-200g', 'GOI_TRAI_NGHIEM', '["Hàng mới","Giảm giá"]', 8000, 6000, saleEndStr, '[]', '', 'Trà nõn tôm cao cấp 200g hộp giấy.', '[]', '[]', 200, 'TN200', false],
-    ['5', 'Trà Búp Khô 500g', 'tra-bup-kho-500g', 'GOI_THUONG_THUC', '["Bán chạy"]', 14000, 14000, '', '[]', '', 'Trà búp khô Tân Cương 500g.', '[]', '[]', 120, 'TBK500', false],
-    ['6', 'Combo Quà Tặng 1kg', 'combo-qua-tang-1kg', 'GOI_TRI_AN', '["Giảm giá","Bán chạy"]', 16000, 14000, saleEndStr, '[]', '', 'Combo 1kg hộp quà tặng.', '[]', '[]', 60, 'CQ1K', false]
+    ['1', 'Trà Tân Cương Xanh', 'tra-tan-cuong-xanh', 'TRA_TAN_CUONG_XANH', '["Trà xanh","Hàng mới"]', 15000, 12000, saleEndStr, '[]', 'https://images.unsplash.com/photo-1563822249548-9a72b6353cd1?w=400', 'Trà nõn tôm Tân Cương 500g, đóng gói hút chân không.', '[]', '[]', 100, 'TN500', false],
+    ['2', 'Combo 2 gói', 'combo-2-goi', 'COMBO_2_GOI', '["Trà xanh","Bán chạy","Giảm giá"]', 18000, 15000, saleEndStr, '[]', 'https://images.unsplash.com/photo-1563822249548-9a72b6353cd1?w=400', 'Combo 2 hộp 500g, tiết kiệm hơn.', '[]', '[]', 80, 'TT1K', true],
+    ['3', 'Combo 5 gói', 'combo-5-goi', 'COMBO_5_GOI', '["Trà xanh","Giảm giá"]', 20000, 18000, saleEndStr, '[]', 'https://images.unsplash.com/photo-1563822249548-9a72b6353cd1?w=400', 'Combo 5 hộp, giá sỉ, quà biếu.', '[]', '[]', 50, 'TA25', false]
   ];
 }

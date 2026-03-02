@@ -33,7 +33,7 @@ QUAN TRỌNG:
 
 ### Menu "⚡ Quản lý Shop"
 - **Khởi tạo dữ liệu mẫu:** Ghi Products (nội dung theo ngành dự án). Có data → hỏi ghi đè. Chỉ cần bấm nút, không copy/paste.
-- **Xác thực Webhook PayOS:** Đăng ký URL qua Hookdeck. Thông báo thành công/lỗi.
+- **Xác thực Webhook PayOS:** Bắt buộc gọi API PayOS confirm-webhook để đăng ký URL (Hookdeck Source). Thông báo thành công/lỗi; vẫn hiển thị URL để kiểm tra. Không được chỉ hiển thị URL trong dialog mà không gọi API.
 - **Update lại cache:** Xóa cache server; lần xem tiếp lấy data mới từ Sheet.
 
 ### Sheets (tự tạo)

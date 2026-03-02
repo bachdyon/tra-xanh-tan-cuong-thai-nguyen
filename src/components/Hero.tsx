@@ -14,8 +14,10 @@ interface HeroProps {
   featuredProduct: Product | null;
 }
 
+const HERO_BG_IMAGE = 'https://bqlkkt.laichau.gov.vn/upload/2000066/20211108/9_12f24.jpg';
+
 export default function Hero({ featuredProduct }: HeroProps) {
-  const img = featuredProduct?.thumbnail || 'https://images.unsplash.com/photo-1563822249548-9a72b6353cd1?auto=format&fit=crop&q=80';
+  const img = featuredProduct?.thumbnail || 'https://haitratancuong.com/wp-content/uploads/2024/01/hop_tra_thai_nguyen_bieu_tang.png';
   const name = featuredProduct?.name || 'Trà Xanh Thượng Hạng';
   const price = featuredProduct ? getEffectivePrice(featuredProduct) : null;
 
@@ -23,7 +25,7 @@ export default function Hero({ featuredProduct }: HeroProps) {
     <section className="pt-16 relative">
       <div className="absolute inset-0 z-0">
         <img
-          src={img}
+          src={HERO_BG_IMAGE}
           alt="Đồi chè Tân Cương"
           className="w-full h-full object-cover opacity-90 min-h-[400px]"
         />
